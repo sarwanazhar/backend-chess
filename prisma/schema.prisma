@@ -13,6 +13,7 @@ model User {
   name     String
   imageUrl String
   email    String
+  subscribed Boolean @default(false)
 
 
   whiteGames Game[] @relation("WhiteGames")
