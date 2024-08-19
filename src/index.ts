@@ -73,6 +73,67 @@ app.post('/fetch-user', async (req: Request, res: Response) => {
     res.status(500).send('Error fetching user');
   }
 });
+app.post('/fetch-profile', async (req: Request, res: Response) => {
+  const { userId } = await req.body;
+
+  if (!userId) {
+    return res.status(400).json({message: "userId missing"})
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      userId: userId
+    }
+  })
+
+  if (!user) {
+    return res.status(404).json({message: "user not found"})
+  }
+
+  return res.status(200).json(user);
+})
+
+// update user profile
+app.post('/update-profile', async (req: Request, res: Response) => {
+  const { userId, name, imageUrl } = req.body;
+
+  // Check if any of the required fields are missing
+  if (!userId || !name || !imageUrl) {
+      return res.status(400).json({ message: "Missing required fields!" });
+  }
+
+  // Find the user by userId
+  const user = await prisma.user.findUnique({
+      where: {
+          userId: userId,
+      }
+  });
+
+  // If the user is not found, return a 404 response
+  if (!user) {
+      return res.status(404).json({ message: "User not found" });
+  }
+
+  // Update the user
+  try {
+      const updatedUser = await prisma.user.update({
+          where: {
+              userId: user.userId,
+          },
+          data: {
+              name: name,
+              imageUrl: imageUrl
+          }
+      });
+
+      // Return a success response
+      return res.status(200).json({ message: "User updated successfully", user: updatedUser });
+  } catch (error) {
+      console.error("Error updating user:", error);
+      return res.status(500).json({ message: "Error updating user" });
+  }
+});
+
 
 // Socket.io setup
 interface WaitingListProps {
