@@ -335,54 +335,47 @@ io.on('connection', (socket) => {
 
   const disconnectionTimeouts = new Map<string, NodeJS.Timeout>();
 
-  socket.on('disconnect', async () => {
-    console.log('User disconnected:', socket.id);
+  socket.on("disconnect", async () => {
+    console.log("user disconnected", socket.id)
 
-    const userId = Array.from(userSockets.entries()).find(
-      ([, value]) => value === socket.id
-    )?.[0];
+    const ongoingGame1 = await prisma.game.findFirst({
+      where: {
+        result: "ongoing",
+        player1SocketId: socket.id
+      }
+    })
+    const ongoingGame2 = await prisma.game.findFirst({
+      where: {
+        result: "ongoing",
+        player2SocketId: socket.id
+      }
+    })
 
-    if (userId) {
-      const timeoutId = setTimeout(async () => {
-        console.log(`User ${userId} permanently disconnected`);
-
-        const disconnectedUser = await prisma.user.findUnique({ where: { userId } });
-
-        const ongoingGame = await prisma.game.findFirst({
-          where: {
-            OR: [
-              { whitePlayerId: disconnectedUser?.id, result: 'ongoing' },
-              { blackPlayerId: disconnectedUser?.id, result: 'ongoing' },
-            ],
-          },
-        });
-
-        if (ongoingGame) {
-          const winnerId =
-            ongoingGame.whitePlayerId === disconnectedUser?.id
-              ? ongoingGame.blackPlayerId
-              : ongoingGame.whitePlayerId;
-
-          await prisma.game.update({
-            where: { id: ongoingGame.id },
-            data: { result: `${winnerId}-disconnected` },
-          });
-
-          const opponentSocketId =
-            ongoingGame.whitePlayerId === disconnectedUser?.id
-              ? ongoingGame.player2SocketId
-              : ongoingGame.player1SocketId;
-
-          io.to(opponentSocketId).emit(
-            'opponentDisconnected',
-            'Your opponent disconnected. You win!'
-          );
+    if (ongoingGame1) {
+      const player2wins = await prisma.game.update({
+        where: {
+          id: ongoingGame1.id
+        },
+        data: {
+          result: "0-1"
         }
-      }, 300000); // 5 minutes
-
-      disconnectionTimeouts.set(socket.id, timeoutId);
+      })
+      return socket.to(player2wins.player2SocketId).emit("gameEnd", "Opponent resinged, you win");
     }
-  });
+
+    if (ongoingGame2) {
+      const player1wins = await prisma.game.update({
+        where: {
+          id: ongoingGame2.id
+        },
+        data: {
+          result: "0-1"
+        }
+      })
+      return socket.to(player1wins.player1SocketId).emit("gameEnd", "Opponent resinged, you win");
+    }
+
+  })
 
   socket.on('reconnectUser', async (userId: string) => {
     clearTimeout(disconnectionTimeouts.get(socket.id));
